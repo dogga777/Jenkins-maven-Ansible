@@ -9,13 +9,15 @@ pipeline {
 
     stages {
 
+        // Stage 1: Checkout source code from GitHub
         stage('Checkout') {
             steps {
-                echo 'Source code checkout completed'
+                echo 'Checking out source code from GitHub'
                 checkout scm
             }
         }
 
+        // Stage 2: Build and test the application
         stage('Build and Test') {
             steps {
                 echo 'Building Spring Boot application'
@@ -23,12 +25,14 @@ pipeline {
             }
         }
 
+        // Stage 3: Publish test results
         stage('Publish Test Results') {
             steps {
                 junit 'target/surefire-reports/*.xml'
             }
         }
 
+        // Stage 4: Archive the generated JAR file
         stage('Archive Artifact') {
             steps {
                 archiveArtifacts artifacts: 'target/*.jar',
@@ -36,6 +40,7 @@ pipeline {
             }
         }
 
+        // Stage 5: Deploy application using Ansible
         stage('Deploy with Ansible') {
             steps {
                 withCredentials([sshUserPrivateKey(
@@ -43,6 +48,7 @@ pipeline {
                     keyFileVariable: 'SSH_KEY',
                     usernameVariable: 'SSH_USER'
                 )]) {
+
                     bat '''
                         echo Fixing SSH private key permissions...
 
@@ -54,27 +60,24 @@ pipeline {
 
                         C:\\Windows\\System32\\OpenSSH\\scp.exe -i "%SSH_KEY%" -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL target\\demo-1.0.0.jar %SSH_USER%@127.0.0.1:/tmp/demo-1.0.0.jar
 
-                        if errorlevel 1 exit /b 1
-
-                        echo Running Ansible deployment...
-
-                        C:\\Windows\\System32\\OpenSSH\\ssh.exe -i "%SSH_KEY%" -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL %SSH_USER%@127.0.0.1 "cd /home/vagrant/project/ansible && ansible-playbook -i inventory.ini deploy.yml --extra-vars jar_source=/tmp/demo-1.0.0.jar"
-
+                        
                         if errorlevel 1 exit /b 1
 
                         echo Verifying application...
 
-                        C:\\Windows\\System32\\OpenSSH\\ssh.exe -i "%SSH_KEY%" -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL %SSH_USER%@127.0.0.1 "curl -fsS http://localhost:8081 >/dev/null"
+                        C:\\Windows\\System32\\OpenSSH\\ssh.exe -i "%SSH_KEY%" -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL %SSH_USER%@127.0.0.1 "for i in $(seq 1 30); do if curl -fsS http://localhost:8081 >/dev/null; then echo Application is responding; exit 0; fi; sleep 2; done; echo Application failed to start; sudo systemctl status springboot --no-pager; sudo journalctl -u springboot -n 30 --no-pager; exit 1"
 
                         if errorlevel 1 exit /b 1
 
                         echo Application deployed and verified successfully!
+
                     '''
                 }
             }
         }
     }
 
+    // Final pipeline status
     post {
         success {
             echo 'BUILD AND DEPLOYMENT SUCCESSFUL!'
