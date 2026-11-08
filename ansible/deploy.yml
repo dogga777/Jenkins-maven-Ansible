@@ -1,0 +1,62 @@
+---
+- name: Deploy Spring Boot Application
+  hosts: webserver
+  become: yes
+
+  vars:
+    app_name: springboot-app
+    app_directory: /opt/springboot
+    jar_source: /home/vagrant/project/target/demo-1.0.0.jar
+    jar_destination: /opt/springboot/demo-1.0.0.jar
+
+  tasks:
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy Spring Boot JAR
+      copy:
+        src: "{{ jar_source }}"
+        dest: "{{ jar_destination }}"
+        mode: '0644'
+      notify: Restart Spring Boot
+
+    - name: Create systemd service
+      copy:
+        dest: /etc/systemd/system/springboot.service
+        content: |
+          [Unit]
+          Description=Spring Boot Application
+          After=network.target
+
+          [Service]
+          User=vagrant
+          WorkingDirectory=/opt/springboot
+          ExecStart=/usr/bin/java -jar /opt/springboot/demo-1.0.0.jar
+          Restart=always
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+        - Restart Spring Boot
+
+    - name: Enable and start Spring Boot service
+      systemd:
+        name: springboot
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+  handlers:
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Restart Spring Boot
+      systemd:
+        name: springboot
+        state: restarted
