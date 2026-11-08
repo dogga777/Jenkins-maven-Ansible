@@ -1,0 +1,42 @@
+
+# Azure Pipeline for Spring Boot application
+
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+
+  # Step 1: Checkout source code
+  - checkout: self
+    displayName: 'Checkout GitHub Repository'
+
+  # Step 2: Build and test using Maven
+  - task: Maven@4
+    displayName: 'Build and Test Spring Boot Application'
+    inputs:
+      mavenPomFile: 'pom.xml'
+      goals: 'clean package'
+      publishJUnitResults: true
+      testResultsFiles: '**/surefire-reports/TEST-*.xml'
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: '1.21'
+      jdkArchitectureOption: 'x64'
+
+  # Step 3: Copy generated JAR file
+  - task: CopyFiles@2
+    displayName: 'Copy JAR Artifact'
+    inputs:
+      SourceFolder: '$(System.DefaultWorkingDirectory)'
+      Contents: '**/target/*.jar'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+  # Step 4: Publish build artifact
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Spring Boot Artifact'
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'SpringBootArtifact'
+      publishLocation: 'Container'
